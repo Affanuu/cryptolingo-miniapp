@@ -1,4 +1,5 @@
 'use client'
+
 import React, { useState, useEffect } from 'react';
 import { Coins, Heart, Trophy, Zap, Share2, Lightbulb, RotateCcw, Play } from 'lucide-react';
 
