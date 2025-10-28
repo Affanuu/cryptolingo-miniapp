@@ -3,7 +3,10 @@
 import React, { useState, useEffect } from 'react';
 import { Coins, Heart, Trophy, Zap, Share2, Lightbulb, RotateCcw, Play } from 'lucide-react';
 
-// Word bank organized by difficulty
+// Your wallet address for receiving payments
+const PAYMENT_ADDRESS = '0xC44F6deeFebBCcd68d7f82B75D375FD89170e968';
+const PAYMENT_AMOUNT = '0x2386f26fc10000'; // 0.00001 ETH in hex
+
 const WORD_BANK = {
   easy: [
     { word: 'BITCOIN', hint: 'First cryptocurrency' },
@@ -41,7 +44,7 @@ const POINTS = { easy: 50, medium: 100, hard: 200 };
 const LEVEL_UP_THRESHOLD = 500;
 
 export default function CryptoLingoGame() {
-  const [gameState, setGameState] = useState('menu'); // menu, playing, won, lost, gameover
+  const [gameState, setGameState] = useState('menu');
   const [lives, setLives] = useState(5);
   const [score, setScore] = useState(0);
   const [level, setLevel] = useState(1);
@@ -49,14 +52,48 @@ export default function CryptoLingoGame() {
   const [currentWord, setCurrentWord] = useState(null);
   const [guessedLetters, setGuessedLetters] = useState([]);
   const [isWalletConnected, setIsWalletConnected] = useState(false);
+  const [userAddress, setUserAddress] = useState(null);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [paymentType, setPaymentType] = useState(''); // 'hint', 'continue', 'share'
+  const [paymentType, setPaymentType] = useState('');
   const [revealedHint, setRevealedHint] = useState('');
   const [wordsCompleted, setWordsCompleted] = useState(0);
+  const [farcasterSDK, setFarcasterSDK] = useState(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
 
   const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
 
-  // Start new game
+  // Initialize Farcaster SDK
+  useEffect(() => {
+    const initSDK = async () => {
+      try {
+        const { default: sdk } = await import('@farcaster/frame-sdk');
+        await sdk.actions.ready();
+        setFarcasterSDK(sdk);
+        
+        const context = await sdk.context;
+        if (context?.user?.fid) {
+          try {
+            const accounts = await sdk.wallet.ethProvider.request({
+              method: 'eth_accounts',
+            });
+            if (accounts && accounts[0]) {
+              setUserAddress(accounts[0]);
+              setIsWalletConnected(true);
+            }
+          } catch (e) {
+            console.log('Not connected yet');
+          }
+        }
+      } catch (error) {
+        console.error('Farcaster SDK not available:', error);
+        setFarcasterSDK({ isFallback: true });
+      }
+    };
+
+    initSDK();
+  }, []);
+
   const startGame = () => {
     const words = WORD_BANK[difficulty];
     const randomWord = words[Math.floor(Math.random() * words.length)];
@@ -64,16 +101,15 @@ export default function CryptoLingoGame() {
     setGuessedLetters([]);
     setGameState('playing');
     setRevealedHint('');
+    setErrorMessage('');
   };
 
-  // Handle letter guess
   const handleGuess = (letter) => {
     if (guessedLetters.includes(letter) || gameState !== 'playing') return;
 
     const newGuessedLetters = [...guessedLetters, letter];
     setGuessedLetters(newGuessedLetters);
 
-    // Check if letter is in word
     if (!currentWord.word.includes(letter)) {
       const newLives = lives - 1;
       setLives(newLives);
@@ -82,7 +118,6 @@ export default function CryptoLingoGame() {
         setGameState('gameover');
       }
     } else {
-      // Check if word is complete
       const wordComplete = currentWord.word.split('').every(l => 
         newGuessedLetters.includes(l)
       );
@@ -93,10 +128,8 @@ export default function CryptoLingoGame() {
         setScore(newScore);
         setWordsCompleted(wordsCompleted + 1);
         
-        // Check for level up
         if (Math.floor(newScore / LEVEL_UP_THRESHOLD) > level - 1) {
           setLevel(level + 1);
-          // Increase difficulty as level increases
           if (level % 3 === 0 && difficulty === 'easy') setDifficulty('medium');
           if (level % 6 === 0 && difficulty === 'medium') setDifficulty('hard');
         }
@@ -106,12 +139,10 @@ export default function CryptoLingoGame() {
     }
   };
 
-  // Continue to next word
   const nextWord = () => {
     startGame();
   };
 
-  // Restart game
   const restartGame = () => {
     setLives(5);
     setScore(0);
@@ -119,25 +150,90 @@ export default function CryptoLingoGame() {
     setDifficulty('easy');
     setWordsCompleted(0);
     setGameState('menu');
+    setErrorMessage('');
   };
 
-  // Connect wallet (simulated)
-  const connectWallet = () => {
-    setIsWalletConnected(true);
+  const connectWallet = async () => {
+    try {
+      setIsProcessing(true);
+      setErrorMessage('');
+
+      if (!farcasterSDK) {
+        throw new Error('Farcaster SDK not loaded');
+      }
+
+      if (farcasterSDK.isFallback) {
+        setIsWalletConnected(true);
+        setUserAddress('0x1234...5678');
+        setIsProcessing(false);
+        return;
+      }
+
+      const accounts = await farcasterSDK.wallet.ethProvider.request({
+        method: 'eth_requestAccounts',
+      });
+
+      if (accounts && accounts[0]) {
+        setUserAddress(accounts[0]);
+        setIsWalletConnected(true);
+      }
+    } catch (error) {
+      console.error('Wallet connection failed:', error);
+      setErrorMessage('Failed to connect wallet. Please try again.');
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
-  // Handle payment
   const handlePayment = (type) => {
+    if (!isWalletConnected) {
+      setErrorMessage('Please connect your wallet first');
+      return;
+    }
     setPaymentType(type);
     setShowPaymentModal(true);
+    setErrorMessage('');
   };
 
-  // Process payment (simulated)
-  const processPayment = () => {
+  const processPayment = async () => {
+    try {
+      setIsProcessing(true);
+      setErrorMessage('');
+
+      if (!farcasterSDK) {
+        throw new Error('Farcaster SDK not loaded');
+      }
+
+      if (farcasterSDK.isFallback) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        completePaymentAction();
+        return;
+      }
+
+      const txHash = await farcasterSDK.wallet.ethProvider.request({
+        method: 'eth_sendTransaction',
+        params: [{
+          to: PAYMENT_ADDRESS,
+          from: userAddress,
+          value: PAYMENT_AMOUNT,
+        }],
+      });
+
+      console.log('Transaction sent:', txHash);
+      completePaymentAction();
+      
+    } catch (error) {
+      console.error('Payment failed:', error);
+      setErrorMessage('Payment failed. Please try again.');
+      setIsProcessing(false);
+    }
+  };
+
+  const completePaymentAction = () => {
     setShowPaymentModal(false);
+    setIsProcessing(false);
     
     if (paymentType === 'hint') {
-      // Reveal a random unguessed letter
       const unguessedLetters = currentWord.word.split('')
         .filter(l => !guessedLetters.includes(l));
       if (unguessedLetters.length > 0) {
@@ -150,13 +246,26 @@ export default function CryptoLingoGame() {
       setLives(5);
       setGameState('playing');
     } else if (paymentType === 'share') {
-      // Simulate sharing to Farcaster
-      const shareText = `🎮 I reached Level ${level} in CryptoLingo with ${score} points! Can you beat my score? 🚀`;
-      alert(`Shared to Farcaster: ${shareText}`);
+      shareToFarcaster();
     }
   };
 
-  // Display word with guessed letters
+  const shareToFarcaster = async () => {
+    const shareText = `🎮 I reached Level ${level} in CryptoLingo with ${score} points! Can you beat my score? 🚀`;
+    
+    try {
+      if (farcasterSDK && !farcasterSDK.isFallback) {
+        await farcasterSDK.actions.openUrl(`https://warpcast.com/~/compose?text=${encodeURIComponent(shareText)}`);
+      } else {
+        window.open(`https://warpcast.com/~/compose?text=${encodeURIComponent(shareText)}`, '_blank');
+      }
+    } catch (error) {
+      console.error('Share failed:', error);
+      navigator.clipboard.writeText(shareText);
+      alert('Share text copied to clipboard!');
+    }
+  };
+
   const displayWord = () => {
     if (!currentWord) return '';
     return currentWord.word.split('').map((letter, i) => (
@@ -173,7 +282,6 @@ export default function CryptoLingoGame() {
     ));
   };
 
-  // Menu Screen
   if (gameState === 'menu') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 flex items-center justify-center p-4">
@@ -219,6 +327,12 @@ export default function CryptoLingoGame() {
               </div>
             </div>
 
+            {errorMessage && (
+              <div className="bg-red-500/20 border border-red-500/50 rounded-xl p-3 text-red-400 text-sm">
+                {errorMessage}
+              </div>
+            )}
+
             <button
               onClick={startGame}
               className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white font-bold py-4 px-8 rounded-xl transition-all duration-300 transform hover:scale-105 shadow-lg flex items-center justify-center gap-2"
@@ -227,19 +341,20 @@ export default function CryptoLingoGame() {
               Start Game
             </button>
 
-            {!isWalletConnected && (
+            {!isWalletConnected ? (
               <button
                 onClick={connectWallet}
-                className="w-full bg-gray-800 hover:bg-gray-700 text-white font-semibold py-3 px-6 rounded-xl transition-all duration-300 border border-gray-600"
+                disabled={isProcessing}
+                className="w-full bg-gray-800 hover:bg-gray-700 disabled:bg-gray-800 disabled:opacity-50 text-white font-semibold py-3 px-6 rounded-xl transition-all duration-300 border border-gray-600"
               >
-                Connect Wallet
+                {isProcessing ? 'Connecting...' : 'Connect Wallet'}
               </button>
-            )}
-
-            {isWalletConnected && (
-              <div className="text-green-400 text-sm flex items-center justify-center gap-2">
-                <Zap className="w-4 h-4" />
-                Wallet Connected
+            ) : (
+              <div className="bg-green-500/20 border border-green-500/50 rounded-xl p-3">
+                <div className="text-green-400 text-sm flex items-center justify-center gap-2">
+                  <Zap className="w-4 h-4" />
+                  Connected: {userAddress?.slice(0, 6)}...{userAddress?.slice(-4)}
+                </div>
               </div>
             )}
           </div>
@@ -248,12 +363,10 @@ export default function CryptoLingoGame() {
     );
   }
 
-  // Playing Screen
   if (gameState === 'playing') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 p-4">
         <div className="max-w-2xl mx-auto">
-          {/* Header Stats */}
           <div className="bg-gray-900/50 backdrop-blur-xl rounded-2xl p-4 mb-4 border border-purple-500/20">
             <div className="grid grid-cols-3 gap-4 text-center">
               <div>
@@ -280,7 +393,6 @@ export default function CryptoLingoGame() {
             </div>
           </div>
 
-          {/* Difficulty Badge */}
           <div className="text-center mb-4">
             <span className={`inline-block px-4 py-2 rounded-full text-sm font-bold ${
               difficulty === 'easy' ? 'bg-green-500/20 text-green-400' :
@@ -291,7 +403,6 @@ export default function CryptoLingoGame() {
             </span>
           </div>
 
-          {/* Word Display */}
           <div className="bg-gray-900/50 backdrop-blur-xl rounded-2xl p-8 mb-4 border border-purple-500/20">
             <div className="flex justify-center flex-wrap mb-6">
               {displayWord()}
@@ -308,11 +419,16 @@ export default function CryptoLingoGame() {
             </div>
           </div>
 
-          {/* Action Buttons */}
+          {errorMessage && (
+            <div className="bg-red-500/20 border border-red-500/50 rounded-xl p-3 text-red-400 text-sm mb-4 text-center">
+              {errorMessage}
+            </div>
+          )}
+
           <div className="flex gap-2 mb-4">
             <button
               onClick={() => handlePayment('hint')}
-              disabled={!isWalletConnected}
+              disabled={!isWalletConnected || isProcessing}
               className="flex-1 bg-yellow-600/20 hover:bg-yellow-600/30 disabled:bg-gray-800 disabled:text-gray-600 text-yellow-400 font-semibold py-3 px-4 rounded-xl transition-all duration-300 border border-yellow-600/30 flex items-center justify-center gap-2"
             >
               <Lightbulb className="w-5 h-5" />
@@ -320,7 +436,6 @@ export default function CryptoLingoGame() {
             </button>
           </div>
 
-          {/* Keyboard */}
           <div className="bg-gray-900/50 backdrop-blur-xl rounded-2xl p-4 border border-purple-500/20">
             <div className="grid grid-cols-7 gap-2">
               {alphabet.map((letter) => (
@@ -343,7 +458,6 @@ export default function CryptoLingoGame() {
           </div>
         </div>
 
-        {/* Payment Modal */}
         {showPaymentModal && (
           <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
             <div className="bg-gray-900 rounded-2xl p-6 max-w-sm w-full border border-purple-500/30">
@@ -355,13 +469,18 @@ export default function CryptoLingoGame() {
               <div className="space-y-3">
                 <button
                   onClick={processPayment}
-                  className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white font-bold py-3 px-6 rounded-xl transition-all duration-300"
+                  disabled={isProcessing}
+                  className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 disabled:from-gray-700 disabled:to-gray-700 text-white font-bold py-3 px-6 rounded-xl transition-all duration-300"
                 >
-                  Pay 0.00001 ETH
+                  {isProcessing ? 'Processing...' : 'Pay 0.00001 ETH'}
                 </button>
                 <button
-                  onClick={() => setShowPaymentModal(false)}
-                  className="w-full bg-gray-800 hover:bg-gray-700 text-white font-semibold py-3 px-6 rounded-xl transition-all duration-300"
+                  onClick={() => {
+                    setShowPaymentModal(false);
+                    setErrorMessage('');
+                  }}
+                  disabled={isProcessing}
+                  className="w-full bg-gray-800 hover:bg-gray-700 disabled:bg-gray-800 disabled:opacity-50 text-white font-semibold py-3 px-6 rounded-xl transition-all duration-300"
                 >
                   Cancel
                 </button>
@@ -373,7 +492,6 @@ export default function CryptoLingoGame() {
     );
   }
 
-  // Word Completed Screen
   if (gameState === 'won') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 flex items-center justify-center p-4">
@@ -403,7 +521,7 @@ export default function CryptoLingoGame() {
             </button>
             <button
               onClick={() => handlePayment('share')}
-              disabled={!isWalletConnected}
+              disabled={!isWalletConnected || isProcessing}
               className="w-full bg-blue-600/20 hover:bg-blue-600/30 disabled:bg-gray-800 disabled:text-gray-600 text-blue-400 font-semibold py-3 px-6 rounded-xl transition-all duration-300 border border-blue-600/30 flex items-center justify-center gap-2"
             >
               <Share2 className="w-5 h-5" />
@@ -415,7 +533,6 @@ export default function CryptoLingoGame() {
     );
   }
 
-  // Game Over Screen
   if (gameState === 'gameover') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 flex items-center justify-center p-4">
@@ -441,11 +558,11 @@ export default function CryptoLingoGame() {
           <div className="space-y-3">
             <button
               onClick={() => handlePayment('continue')}
-              disabled={!isWalletConnected}
+              disabled={!isWalletConnected || isProcessing}
               className="w-full bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 disabled:from-gray-700 disabled:to-gray-700 disabled:text-gray-500 text-white font-bold py-4 px-8 rounded-xl transition-all duration-300 transform hover:scale-105 flex items-center justify-center gap-2"
             >
               <Zap className="w-5 h-5" />
-              Continue (0.00001 ETH)
+              {isProcessing ? 'Processing...' : 'Continue (0.00001 ETH)'}
             </button>
             <button
               onClick={restartGame}
@@ -456,7 +573,7 @@ export default function CryptoLingoGame() {
             </button>
             <button
               onClick={() => handlePayment('share')}
-              disabled={!isWalletConnected}
+              disabled={!isWalletConnected || isProcessing}
               className="w-full bg-blue-600/20 hover:bg-blue-600/30 disabled:bg-gray-800 disabled:text-gray-600 text-blue-400 font-semibold py-3 px-6 rounded-xl transition-all duration-300 border border-blue-600/30 flex items-center justify-center gap-2"
             >
               <Share2 className="w-5 h-5" />
@@ -465,7 +582,6 @@ export default function CryptoLingoGame() {
           </div>
         </div>
 
-        {/* Payment Modal */}
         {showPaymentModal && (
           <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
             <div className="bg-gray-900 rounded-2xl p-6 max-w-sm w-full border border-purple-500/30">
