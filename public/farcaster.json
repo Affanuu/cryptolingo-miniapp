@@ -1,0 +1,18 @@
+{
+  "accountAssociation": {
+    "header": "eyJmaWQiOjEyMzQ1LCJ0eXBlIjoiY3VzdG9keSIsImtleSI6IjB4YWJjZGVmIn0",
+    "payload": "eyJkb21haW4iOiJ5b3VyLWFwcC52ZXJjZWwuYXBwIn0",
+    "signature": "MHhhYmNkZWYxMjM0NTY3ODkw"
+  },
+  "frame": {
+    "version": "1",
+    "name": "CryptoLingo",
+    "iconUrl": "https://YOUR-VERCEL-URL.vercel.app/icon.png",
+    "splashImageUrl": "https://YOUR-VERCEL-URL.vercel.app/splash.png",
+    "splashBackgroundColor": "#7C3AED",
+    "homeUrl": "https://YOUR-VERCEL-URL.vercel.app",
+    "imageUrl": "https://YOUR-VERCEL-URL.vercel.app/share.png",
+    "buttonTitle": "Play CryptoLingo",
+    "description": "Guess crypto words and level up! Test your blockchain knowledge."
+  }
+}
