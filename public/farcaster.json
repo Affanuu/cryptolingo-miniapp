@@ -7,11 +7,11 @@
   "frame": {
     "version": "1",
     "name": "CryptoLingo",
-    "iconUrl": "https://YOUR-VERCEL-URL.vercel.app/icon.png",
-    "splashImageUrl": "https://YOUR-VERCEL-URL.vercel.app/splash.png",
+    "iconUrl": "https://cryptolingo-miniapp.vercel.app/icon.png",
+    "splashImageUrl": "https://cryptolingo-miniapp.vercel.app/splash.png",
     "splashBackgroundColor": "#7C3AED",
-    "homeUrl": "https://YOUR-VERCEL-URL.vercel.app",
-    "imageUrl": "https://YOUR-VERCEL-URL.vercel.app/share.png",
+    "homeUrl": "https://cryptolingo-miniapp.vercel.app",
+    "imageUrl": "https://cryptolingo-miniapp.vercel.app/share.png",
     "buttonTitle": "Play CryptoLingo",
     "description": "Guess crypto words and level up! Test your blockchain knowledge."
   }
